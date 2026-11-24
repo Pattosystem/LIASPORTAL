@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>ID・パスワード管理ポータル</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--line:#dde2ea;--text:#1f2a37;--sub:#6b7686;--main:#2b5fd9;--main-d:#1f4bb5;--danger:#d64545;--ok:#1e9e62;}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Meiryo UI","Meiryo","Hiragino Sans","Yu Gothic UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--text);border-radius:6px;padding:6px 12px}
+button:hover{background:#f0f3f8}
+button:disabled{opacity:.6;cursor:default}
+button.primary{background:var(--main);border-color:var(--main);color:#fff}
+button.primary:hover{background:var(--main-d)}
+button.danger{color:var(--danger);border-color:#f0c4c4}
+button.small{padding:3px 8px;font-size:12px}
+input,select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;background:#fff;color:var(--text)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--main)}
+.hidden{display:none!important}
+
+/* ロック画面 */
+#lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.lock-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:32px;width:100%;max-width:380px;box-shadow:0 4px 20px rgba(0,0,0,.05)}
+.lock-box h1{font-size:20px;margin:0 0 6px}
+.lock-box p{color:var(--sub);margin:0 0 20px;font-size:13px;line-height:1.6}
+.lock-box label{display:block;font-size:12px;color:var(--sub);margin:12px 0 4px}
+.lock-box .primary{width:100%;margin-top:18px;padding:10px}
+.lock-err{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px;line-height:1.5}
+.lock-link{display:block;text-align:center;margin-top:16px;font-size:12px;color:var(--main);cursor:pointer;background:none;border:none;width:100%}
+.warn{background:#fff8e6;border:1px solid #f3dfa8;color:#7a5b00;border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.6;margin-top:12px}
+.who{font-size:12px;color:var(--sub);margin-bottom:14px}
+
+/* メイン画面 */
+header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+.bar{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar h1{font-size:17px;margin:0 12px 0 0;white-space:nowrap}
+.bar .search{flex:1;min-width:180px}
+.bar select{width:auto;min-width:140px}
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.08);min-width:210px;padding:6px;z-index:20}
+.menu button{display:block;width:100%;text-align:left;border:none;padding:8px 10px}
+.menu .me{font-size:11px;color:var(--sub);padding:6px 10px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;word-break:break-all}
+main{max-width:1200px;margin:0 auto;padding:20px}
+.count{color:var(--sub);font-size:12px;margin-bottom:10px}
+.group-title{font-size:13px;font-weight:bold;color:var(--sub);margin:22px 0 10px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.group-title:first-of-type{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px}
+.card-name{font-weight:bold;font-size:15px;word-break:break-all}
+.open{display:inline-block;font-size:12px;color:var(--main);text-decoration:none;margin-bottom:8px}
+.open:hover{text-decoration:underline}
+.row{display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px dashed #eef1f5}
+.row .lbl{width:28px;font-size:11px;color:var(--sub);flex-shrink:0}
+.row .val{flex:1;word-break:break-all;font-size:13px}
+.mono{font-family:Consolas,"Courier New",monospace}
+.memo{font-size:12px;color:var(--sub);margin-top:6px;white-space:pre-wrap;word-break:break-all}
+.upd{font-size:11px;color:#9aa3b0;margin-top:8px;text-align:right}
+.empty{text-align:center;color:var(--sub);padding:60px 20px;background:#fff;border:1px dashed var(--line);border-radius:10px}
+
+/* モーダル */
+.overlay{position:fixed;inset:0;background:rgba(20,30,50,.35);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:480px;max-height:90vh;overflow:auto;padding:22px}
+.modal h2{font-size:16px;margin:0 0 14px}
+.modal label{display:block;font-size:12px;color:var(--sub);margin:10px 0 4px}
+.inline{display:flex;gap:6px}
+.inline input{flex:1}
+.gen{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--sub);margin-top:6px;flex-wrap:wrap}
+.gen input[type=number]{width:64px;padding:4px 6px}
+.gen input[type=checkbox]{width:auto}
+.modal-foot{display:flex;justify-content:space-between;gap:8px;margin-top:20px}
+.modal-foot .right{display:flex;gap:8px;margin-left:auto}
+.req{color:var(--danger)}
+
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2a37;color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:100}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ===== ログイン／ロック画面 ===== -->
+<section id="lock">
+  <div class="lock-box">
+    <h1>ID・パスワード管理ポータル</h1>
+
+    <!-- ステップ1：各自のアカウントでログイン -->
+    <form id="loginForm" class="hidden" autocomplete="on">
+      <p>ご自分のメールアドレスとパスワードでログインしてください。</p>
+      <label for="lEmail">メールアドレス</label>
+      <input type="email" id="lEmail" autocomplete="username">
+      <label for="lPass">パスワード</label>
+      <input type="password" id="lPass" autocomplete="current-password">
+      <button type="submit" class="primary" id="loginBtn">ログイン</button>
+      <div class="lock-err" id="loginErr"></div>
+    </form>
+
+    <!-- ステップ2：チーム共通マスターパスワードでロック解除 -->
+    <form id="lockForm" class="hidden" autocomplete="off">
+      <div class="who" id="whoAmI"></div>
+      <p id="lockDesc"></p>
+      <label for="pw1">チーム共通マスターパスワード</label>
+      <input type="password" id="pw1" autocomplete="off">
+      <div id="pw2Wrap" class="hidden">
+        <label for="pw2">チーム共通マスターパスワード（確認）</label>
+        <input type="password" id="pw2" autocomplete="off">
+        <div class="warn">このパスワードを4人で共有します。忘れると保存したデータは誰にも復元できません。必ず控えておいてください。</div>
+      </div>
+      <button type="submit" class="primary" id="lockBtn"></button>
+      <div class="lock-err" id="lockErr"></div>
+      <button type="button" class="lock-link" id="logoutLink">別のアカウントでログインし直す</button>
+    </form>
+
+    <div id="msgBox" class="hidden"><p id="msgText"></p></div>
+  </div>
+</section>
+
+<!-- ===== メイン画面 ===== -->
+<section id="app" class="hidden">
+  <header>
+    <div class="bar">
+      <h1>ID・パスワード管理</h1>
+      <input class="search" id="search" type="search" placeholder="サービス名・ID・URL・メモで検索">
+      <select id="catFilter"></select>
+      <button id="reloadBtn" title="他のメンバーの変更を読み込みます">↻ 最新にする</button>
+      <button class="primary" id="addBtn">＋ 追加</button>
+      <div class="menu-wrap">
+        <button id="menuBtn">メニュー ▾</button>
+        <div class="menu hidden" id="menu">
+          <div class="me" id="menuMe"></div>
+          <button id="backupBtn">バックアップを保存（暗号化）</button>
+          <button id="lockBtn2">ロックする</button>
+          <button id="logoutBtn">ログアウト</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </main>
+</section>
+
+<!-- ===== 登録・編集モーダル ===== -->
+<div class="overlay hidden" id="editOverlay">
+  <div class="modal">
+    <h2 id="editTitle">新規登録</h2>
+    <form id="editForm" autocomplete="off">
+      <label>サービス名 <span class="req">*</span></label>
+      <input id="fName" required placeholder="例：Bカート管理画面">
+      <label>ログインURL</label>
+      <input id="fUrl" placeholder="https://...">
+      <label>ログインID</label>
+      <input id="fId" autocomplete="off">
+      <label>パスワード</label>
+      <div class="inline">
+        <input id="fPw" type="password" class="mono" autocomplete="new-password">
+        <button type="button" id="fPwShow">表示</button>
+        <button type="button" id="fPwGen">生成</button>
+      </div>
+      <div class="gen">
+        生成設定：長さ <input type="number" id="genLen" value="16" min="8" max="64">
+        <label style="margin:0;display:flex;align-items:center;gap:4px"><input type="checkbox" id="genSym" checked>記号を含める</label>
+      </div>
+      <label>カテゴリ</label>
+      <input id="fCat" list="catList" placeholder="例：仕入先 / 社内システム / 銀行">
+      <datalist id="catList"></datalist>
+      <label>メモ</label>
+      <textarea id="fMemo" rows="3" placeholder="担当者、契約プラン、2段階認証の有無など"></textarea>
+      <div class="modal-foot">
+        <button type="button" class="danger hidden" id="delBtn">削除</button>
+        <div class="right">
+          <button type="button" id="cancelBtn">キャンセル</button>
+          <button type="submit" class="primary" id="saveBtn">保存</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+// ================= 設定（ここだけ書き換える） =================
+const SUPABASE_URL      = 'https://xxxxxxxx.supabase.co';
+const SUPABASE_ANON_KEY = 'ここに anon public key を貼る';
+const AUTO_LOCK_MIN     = 10;   // 操作がない場合に自動ロックするまでの分数
+const ITER              = 310000;
+const CHECK_TEXT        = 'pwportal-ok';
+
+// ================= 共通 =================
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2200); }
+function normUrl(u){
+  u=(u||'').trim(); if(!u) return '';
+  if(!/^[a-z]+:\/\//i.test(u)) u='https://'+u;
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){
+    const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+}
+function fmtDate(iso){ if(!iso) return ''; const d=new Date(iso); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function shortName(email){ return (email||'').split('@')[0]; }
+
+// ================= 暗号化 =================
+const te=new TextEncoder(), td=new TextDecoder();
+let key=null;
+function toB64(u8){ let s=''; for(let i=0;i<u8.length;i++) s+=String.fromCharCode(u8[i]); return btoa(s); }
+function fromB64(s){ const b=atob(s); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+async function deriveKey(pw, saltU8, iterations){
+  const base=await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt:saltU8, iterations, hash:'SHA-256'},
+    base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function encStr(str, k=key){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM', iv}, k, te.encode(str));
+  return {iv:toB64(iv), ct:toB64(new Uint8Array(ct))};
+}
+async function decStr(iv, ct, k=key){
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM', iv:fromB64(iv)}, k, fromB64(ct));
+  return td.decode(pt);
+}
+
+// ================= Supabase =================
+let sb=null, me=null, meta=null, entries=[], lastLoad=0;
+
+function showOnly(which){
+  ['loginForm','lockForm','msgBox'].forEach(id=>$(id).classList.toggle('hidden', id!==which));
+  $('lock').classList.remove('hidden'); $('app').classList.add('hidden');
+}
+function showMsg(text){ $('msgText').textContent=text; showOnly('msgBox'); }
+
+async function start(){
+  if(!window.crypto || !crypto.subtle){ showMsg('このブラウザでは暗号化機能が使えません。Chrome / Edge の最新版で開いてください。'); return; }
+  if(!window.supabase){ showMsg('接続用の部品を読み込めませんでした。ネットワークを確認して再読み込みしてください。'); return; }
+  if(SUPABASE_URL.includes('xxxxxxxx')){ showMsg('初期設定がまだです。HTMLファイル内の SUPABASE_URL と SUPABASE_ANON_KEY を書き換えてください。'); return; }
+  sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){ me=session.user.email; await afterLogin(); }
+  else showLogin();
+}
+
+function showLogin(){
+  $('lEmail').value=''; $('lPass').value=''; $('loginErr').textContent='';
+  showOnly('loginForm'); setTimeout(()=>$('lEmail').focus(),50);
+}
+
+$('loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const btn=$('loginBtn'); btn.disabled=true; $('loginErr').textContent='';
+  const {data,error}=await sb.auth.signInWithPassword({email:$('lEmail').value.trim(), password:$('lPass').value});
+  btn.disabled=false;
+  if(error){ $('loginErr').textContent='メールアドレスまたはパスワードが違います。'; return; }
+  me=data.user.email;
+  await afterLogin();
+});
+
+async function afterLogin(){
+  // メンバー確認
+  const {data:mem,error:e1}=await sb.from('pw_members').select('email');
+  if(e1){ showMsg('データベースに接続できませんでした：'+e1.message); return; }
+  if(!mem || !mem.some(m=>(m.email||'').toLowerCase()===(me||'').toLowerCase())){
+    showOnly('lockForm');
+    $('whoAmI').textContent='ログイン中：'+me;
+    $('lockDesc').textContent='';
+    $('lockErr').textContent='このアカウントはメンバーに登録されていません。管理者に登録を依頼してください。';
+    ['pw1','pw2Wrap','lockBtn'].forEach(id=>$(id).classList.add('hidden'));
+    $(`pw1`).previousElementSibling.classList.add('hidden');
+    return;
+  }
+  ['pw1','lockBtn'].forEach(id=>$(id).classList.remove('hidden'));
+  $('pw1').previousElementSibling.classList.remove('hidden');
+  await showUnlock();
+}
+
+async function showUnlock(note){
+  const {data,error}=await sb.from('pw_vault_meta').select('*').eq('id',1).maybeSingle();
+  if(error){ showMsg('データベースに接続できませんでした：'+error.message); return; }
+  meta=data;
+  showOnly('lockForm');
+  $('whoAmI').textContent='ログイン中：'+me;
+  $('pw1').value=''; $('pw2').value=''; $('lockErr').textContent='';
+  if(!meta){
+    $('lockDesc').textContent='はじめての利用です。4人で共有する「チーム共通マスターパスワード」を決めてください。登録データはすべてこのパスワードで暗号化されます。';
+    $('pw2Wrap').classList.remove('hidden'); $('lockBtn').textContent='設定してはじめる';
+  }else{
+    $('lockDesc').textContent=note || 'チーム共通マスターパスワードを入力してロックを解除してください。';
+    $('pw2Wrap').classList.add('hidden'); $('lockBtn').textContent='ロック解除';
+  }
+  setTimeout(()=>$('pw1').focus(),50);
+}
+
+$('lockForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const pw=$('pw1').value, err=$('lockErr'), btn=$('lockBtn'); err.textContent='';
+  if(!meta){
+    if(pw.length<10){ err.textContent='共有用なので10文字以上で設定してください。'; return; }
+    if(pw!==$('pw2').value){ err.textContent='確認用のパスワードが一致しません。'; return; }
+    btn.disabled=true;
+    const salt=crypto.getRandomValues(new Uint8Array(16));
+    const k=await deriveKey(pw, salt, ITER);
+    const chk=await encStr(CHECK_TEXT, k);
+    const {error}=await sb.from('pw_vault_meta').insert({id:1, salt:toB64(salt), iter:ITER, check_iv:chk.iv, check_ct:chk.ct});
+    btn.disabled=false;
+    if(error){ err.textContent='設定に失敗しました（他のメンバーが先に設定した可能性があります）。画面を再読み込みしてください。'; return; }
+    key=k; await enterApp();
+  }else{
+    btn.disabled=true; btn.textContent='確認中…';
+    try{
+      const k=await deriveKey(pw, fromB64(meta.salt), meta.iter);
+      if(await decStr(meta.check_iv, meta.check_ct, k)!==CHECK_TEXT) throw 0;
+      key=k; await enterApp();
+    }catch(ex){ err.textContent='マスターパスワードが違います。'; }
+    finally{ btn.disabled=false; btn.textContent='ロック解除'; }
+  }
+});
+
+async function logout(){
+  key=null; entries=[]; $('list').innerHTML='';
+  closeEdit(); $('menu').classList.add('hidden');
+  await sb.auth.signOut(); me=null; showLogin();
+}
+$('logoutLink').addEventListener('click', logout);
+$('logoutBtn').addEventListener('click', logout);
+
+// ================= データ読み書き =================
+async function loadEntries(){
+  const {data,error}=await sb.from('pw_entries').select('*');
+  if(error){ toast('読み込みに失敗しました：'+error.message); return false; }
+  const out=[]; let bad=0;
+  for(const r of data){
+    try{
+      const d=JSON.parse(await decStr(r.iv, r.ct));
+      out.push({...d, id:r.id, updatedAt:r.updated_at, updatedBy:r.updated_by});
+    }catch(ex){ bad++; }
+  }
+  entries=out; lastLoad=Date.now();
+  if(bad) toast(`${bad}件、読み込めないデータがありました`);
+  return true;
+}
+async function saveEntry(id, data){
+  const {iv,ct}=await encStr(JSON.stringify(data));
+  const q = id ? sb.from('pw_entries').update({iv,ct}).eq('id',id)
+               : sb.from('pw_entries').insert({iv,ct});
+  const {error}=await q;
+  if(error) throw error;
+}
+
+// ================= メイン画面 =================
+async function enterApp(){
+  $('lock').classList.add('hidden'); $('app').classList.remove('hidden');
+  $('menuMe').textContent='ログイン中：'+me;
+  $('search').value=''; $('catFilter').value='';
+  $('list').innerHTML='<div class="empty">読み込み中…</div>';
+  await loadEntries(); render(); resetIdle();
+}
+function lockNow(note){
+  key=null; entries=[]; $('list').innerHTML='';
+  closeEdit(); $('menu').classList.add('hidden');
+  showUnlock(note);
+}
+
+function categories(){
+  const set=new Set(entries.map(e=>e.category||'未分類'));
+  return [...set].sort((a,b)=>a==='未分類'?1:b==='未分類'?-1:a.localeCompare(b,'ja'));
+}
+
+const shown=new Set();
+function render(){
+  if(!key) return;
+  const cats=categories();
+  const cur=$('catFilter').value;
+  $('catFilter').innerHTML='<option value="">すべてのカテゴリ</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('catFilter').value=cats.includes(cur)?cur:'';
+  $('catList').innerHTML=cats.filter(c=>c!=='未分類').map(c=>`<option value="${esc(c)}">`).join('');
+
+  const q=$('search').value.trim().toLowerCase();
+  const cf=$('catFilter').value;
+  const list=entries.filter(e=>{
+    if(cf && (e.category||'未分類')!==cf) return false;
+    if(!q) return true;
+    return [e.name,e.loginId,e.url,e.memo,e.category].some(v=>(v||'').toLowerCase().includes(q));
+  });
+
+  $('count').textContent=`${list.length} 件表示 ／ 全 ${entries.length} 件`;
+  if(!entries.length){ $('list').innerHTML='<div class="empty">まだ登録がありません。右上の「＋ 追加」から登録してください。</div>'; return; }
+  if(!list.length){ $('list').innerHTML='<div class="empty">該当するものがありません。</div>'; return; }
+
+  const groups={};
+  list.forEach(e=>{ const c=e.category||'未分類'; (groups[c]=groups[c]||[]).push(e); });
+  let html='';
+  cats.filter(c=>groups[c]).forEach(c=>{
+    html+=`<div class="group-title">${esc(c)}（${groups[c].length}）</div><div class="grid">`;
+    groups[c].sort((a,b)=>(a.name||'').localeCompare(b.name||'','ja')).forEach(e=>{
+      const url=normUrl(e.url);
+      const vis=shown.has(e.id);
+      html+=`<div class="card">
+        <div class="card-head"><div class="card-name">${esc(e.name)}</div>
+          <button class="small" data-act="edit" data-id="${e.id}">編集</button></div>
+        ${url?`<a class="open" href="${esc(url)}" target="_blank" rel="noopener noreferrer">ログイン画面を開く ↗</a>`:''}
+        <div class="row"><span class="lbl">ID</span><span class="val">${esc(e.loginId)||'<span style="color:#aab">―</span>'}</span>
+          ${e.loginId?`<button class="small" data-act="copyId" data-id="${e.id}">コピー</button>`:''}</div>
+        <div class="row"><span class="lbl">PW</span><span class="val mono">${e.password?(vis?esc(e.password):'••••••••'):'<span style="color:#aab">―</span>'}</span>
+          ${e.password?`<button class="small" data-act="toggle" data-id="${e.id}">${vis?'隠す':'表示'}</button>
+          <button class="small" data-act="copyPw" data-id="${e.id}">コピー</button>`:''}</div>
+        ${e.memo?`<div class="memo">${esc(e.memo)}</div>`:''}
+        <div class="upd">最終更新：${esc(fmtDate(e.updatedAt))}　${esc(shortName(e.updatedBy))}</div>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  $('list').innerHTML=html;
+}
+
+$('list').addEventListener('click', async e=>{
+  const b=e.target.closest('button[data-act]'); if(!b) return;
+  const ent=entries.find(x=>x.id===b.dataset.id); if(!ent) return;
+  const act=b.dataset.act;
+  if(act==='edit') openEdit(ent);
+  else if(act==='copyId'){ await copyText(ent.loginId); toast('IDをコピーしました'); }
+  else if(act==='copyPw'){ await copyText(ent.password); toast('パスワードをコピーしました'); }
+  else if(act==='toggle'){ shown.has(ent.id)?shown.delete(ent.id):shown.add(ent.id); render(); }
+});
+$('search').addEventListener('input', render);
+$('catFilter').addEventListener('change', render);
+$('reloadBtn').addEventListener('click', async ()=>{ if(await loadEntries()){ render(); toast('最新の内容を読み込みました'); } });
+
+// 画面に戻ってきたとき、30秒以上たっていれば最新を読み込む
+window.addEventListener('focus', async ()=>{
+  if(key && Date.now()-lastLoad>30000 && $('editOverlay').classList.contains('hidden')){
+    if(await loadEntries()) render();
+  }
+});
+
+// メニュー
+$('menuBtn').addEventListener('click', e=>{ e.stopPropagation(); $('menu').classList.toggle('hidden'); });
+document.addEventListener('click', ()=>$('menu').classList.add('hidden'));
+$('lockBtn2').addEventListener('click', ()=>lockNow());
+$('backupBtn').addEventListener('click', async ()=>{
+  const {data:rows,error}=await sb.from('pw_entries').select('*');
+  if(error){ toast('バックアップに失敗しました'); return; }
+  const blob={app:'pwportal-team', v:1, exportedAt:new Date().toISOString(), meta, entries:rows};
+  const d=new Date(); const ymd=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(blob)],{type:'application/json'}));
+  a.download=`pw-portal-team-backup-${ymd}.json`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('暗号化したままバックアップを保存しました');
+});
+
+// ================= 登録・編集 =================
+let editingId=null;
+function openEdit(ent){
+  editingId=ent?ent.id:null;
+  $('editTitle').textContent=ent?'編集':'新規登録';
+  $('fName').value=ent?.name||''; $('fUrl').value=ent?.url||''; $('fId').value=ent?.loginId||'';
+  $('fPw').value=ent?.password||''; $('fPw').type='password'; $('fPwShow').textContent='表示';
+  $('fCat').value=ent?.category||''; $('fMemo').value=ent?.memo||'';
+  $('delBtn').classList.toggle('hidden', !ent);
+  $('editOverlay').classList.remove('hidden');
+  setTimeout(()=>$('fName').focus(),50);
+}
+function closeEdit(){ $('editOverlay').classList.add('hidden'); editingId=null; }
+$('addBtn').addEventListener('click', ()=>openEdit(null));
+$('cancelBtn').addEventListener('click', closeEdit);
+$('fPwShow').addEventListener('click', ()=>{
+  const p=$('fPw'); p.type=p.type==='password'?'text':'password'; $('fPwShow').textContent=p.type==='password'?'表示':'隠す';
+});
+$('fPwGen').addEventListener('click', ()=>{
+  if($('fPw').value && !confirm('今のパスワードを新しく生成したものに置き換えますか？')) return;
+  $('fPw').value=genPassword(); $('fPw').type='text'; $('fPwShow').textContent='隠す';
+});
+$('editForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const data={
+    name:$('fName').value.trim(), url:$('fUrl').value.trim(), loginId:$('fId').value.trim(),
+    password:$('fPw').value, category:$('fCat').value.trim(), memo:$('fMemo').value.trim()
+  };
+  if(!data.name){ $('fName').focus(); return; }
+  const btn=$('saveBtn'); btn.disabled=true;
+  try{
+    await saveEntry(editingId, data);
+    closeEdit(); await loadEntries(); render(); toast('保存しました');
+  }catch(ex){ toast('保存に失敗しました：'+(ex.message||ex)); }
+  finally{ btn.disabled=false; }
+});
+$('delBtn').addEventListener('click', async ()=>{
+  const ent=entries.find(x=>x.id===editingId); if(!ent) return;
+  if(!confirm(`「${ent.name}」を削除します。4人全員の画面から消えます。よろしいですか？`)) return;
+  const {error}=await sb.from('pw_entries').delete().eq('id',editingId);
+  if(error){ toast('削除に失敗しました'); return; }
+  closeEdit(); await loadEntries(); render(); toast('削除しました');
+});
+
+function genPassword(){
+  const len=Math.min(64,Math.max(8,parseInt($('genLen').value)||16));
+  const sets=['ABCDEFGHJKLMNPQRSTUVWXYZ','abcdefghijkmnopqrstuvwxyz','23456789'];
+  if($('genSym').checked) sets.push('!@#$%&*-_=+?');
+  const all=sets.join('');
+  const rnd=n=>{ const max=Math.floor(4294967296/n)*n; const a=new Uint32Array(1); do{crypto.getRandomValues(a);}while(a[0]>=max); return a[0]%n; };
+  let pw;
+  do{ pw=''; for(let i=0;i<len;i++) pw+=all[rnd(all.length)]; }
+  while(!sets.every(s=>[...pw].some(c=>s.includes(c))));
+  return pw;
+}
+
+// ================= 自動ロック =================
+let idleTimer=null;
+function resetIdle(){
+  if(!key) return;
+  clearTimeout(idleTimer);
+  idleTimer=setTimeout(()=>{ if(key) lockNow(`${AUTO_LOCK_MIN}分間操作がなかったため、自動でロックしました。`); }, AUTO_LOCK_MIN*60*1000);
+}
+['click','keydown','mousemove','scroll','touchstart'].forEach(ev=>document.addEventListener(ev, resetIdle, {passive:true}));
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeEdit(); });
+
+start();
+})();
+</script>
+</body>
+</html>
