@@ -261,7 +261,7 @@ $('loginForm').addEventListener('submit', async e=>{
   const btn=$('loginBtn'); btn.disabled=true; $('loginErr').textContent='';
   const {data,error}=await sb.auth.signInWithPassword({email:$('lEmail').value.trim(), password:$('lPass').value});
   btn.disabled=false;
-  if(error){ $('loginErr').textContent='メールアドレスまたはパスワードが違います。'; return; }
+    if(error){ $('loginErr').textContent='ログインできませんでした：'+error.message; return; }
   me=data.user.email;
   await afterLogin();
 });
